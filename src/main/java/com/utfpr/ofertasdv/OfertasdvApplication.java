@@ -1,4 +1,4 @@
-package com.utfpr.ofertasdv.;
+package com.utfpr.ofertasdv;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
