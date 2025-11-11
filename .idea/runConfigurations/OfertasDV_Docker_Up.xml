@@ -1,0 +1,13 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="OfertasDV Docker Up" type="Application" factoryName="Application">
+    <option name="MAIN_CLASS_NAME" value="com.utfpr.ofertasdv.DockerComposeRunner" />
+    <module name="ofertasdv" />
+    <option name="PROGRAM_PARAMETERS" value="up" />
+    <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$" />
+    <shortenClasspath name="NONE" />
+    <method v="2">
+      <option name="Make" enabled="true" />
+    </method>
+  </configuration>
+</component>
+
