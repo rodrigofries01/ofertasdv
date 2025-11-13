@@ -2,6 +2,7 @@ package com.utfpr.ofertasdv.config;
 
 import com.utfpr.ofertasdv.service.UsuarioService;
 import org.springframework.context.annotation.Bean;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.*;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 import org.springframework.security.config.annotation.web.builders.*;
@@ -34,9 +35,11 @@ public class SecurityConfig {
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         JwtAuthenticationFilter jwtFilter = new JwtAuthenticationFilter(jwtUtil, usuarioService);
         http.csrf().disable()
+                .cors() // Enable CORS
+                .and()
                 .authorizeHttpRequests((authz) -> authz
                         .requestMatchers("/api/auth/**", "/uploads/**").permitAll()
-                        .requestMatchers("/api/ofertas/**").permitAll() // listar e buscar liberados; endpoints de criar/aprovar podem exigir ROLE
+                        .requestMatchers(HttpMethod.GET, "/api/ofertas/**").permitAll()
                         .anyRequest().authenticated()
                 )
                 .sessionManagement().sessionCreationPolicy(SessionCreationPolicy.STATELESS);
