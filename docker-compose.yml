@@ -3,6 +3,7 @@ services:
   db:
     image: postgres:16
     container_name: ofertasdb
+    restart: unless-stopped
     environment:
       POSTGRES_DB: ofertasdb
       POSTGRES_USER: postgres
@@ -33,16 +34,13 @@ services:
     ports:
       - "8080:8080"
     restart: unless-stopped
+    develop:
+      watch:
+        - path: ./src
+          action: rebuild
+        - path: ./pom.xml
+          action: rebuild
+        - path: ./Dockerfile
+          action: rebuild
 volumes:
   db_data:
-# Maven artifacts
-/target
-
-# IDEs
-/.idea
-/.vscode
-*.iml
-
-# OS
-.DS_Store
-
