@@ -1,6 +1,7 @@
 package com.utfpr.ofertasdv.service;
 
 import com.utfpr.ofertasdv.model.*;
+import com.utfpr.ofertasdv.model.Oferta.Status;
 import com.utfpr.ofertasdv.repository.*;
 import com.utfpr.ofertasdv.exception.ResourceNotFoundException;
 import org.springframework.data.domain.*;
@@ -54,6 +55,13 @@ public class OfertaService {
         return ofertaRepo.findByNomeProdutoContainingIgnoreCase(nome, pageable);
     }
 
+    public Page<Oferta> buscarOfertasPorComerciante(Long comercianteId, String nome, Pageable pageable) {
+        if (nome == null || nome.isBlank()) {
+            return ofertaRepo.findByComerciante_Id(comercianteId, pageable);
+        }
+        return ofertaRepo.findByComerciante_IdAndNomeProdutoContainingIgnoreCase(comercianteId, nome, pageable);
+    }
+
     public Oferta aprovarOferta(Long ofertaId, Long adminId) {
         Oferta oferta = ofertaRepo.findById(ofertaId)
                 .orElseThrow(() -> new ResourceNotFoundException("Oferta não encontrada"));
@@ -90,5 +98,33 @@ public class OfertaService {
         return oferta;
     }
 
-    // métodos adicionais: editar, deletar, buscar por id...
+    public Oferta atualizarOferta(Long ofertaId, Oferta ofertaAtualizada, Long comercianteId) {
+        Oferta oferta = ofertaRepo.findById(ofertaId)
+                .orElseThrow(() -> new ResourceNotFoundException("Oferta não encontrada"));
+        
+        if (!oferta.getComerciante().getId().equals(comercianteId)) {
+            throw new RuntimeException("Você não tem permissão para editar esta oferta");
+        }
+        
+        // Update fields (except photo)
+        oferta.setNomeProduto(ofertaAtualizada.getNomeProduto());
+        oferta.setPreco(ofertaAtualizada.getPreco());
+        oferta.setQuantidade(ofertaAtualizada.getQuantidade());
+        oferta.setDescricao(ofertaAtualizada.getDescricao());
+        oferta.setStatus(Status.PENDENTE);
+        
+        Oferta updated = ofertaRepo.save(oferta);
+        
+        Usuario comerciante = usuarioRepo.findById(comercianteId)
+                .orElseThrow(() -> new ResourceNotFoundException("Comerciante não encontrado"));
+        Auditoria audit = new Auditoria();
+        audit.setOferta(updated);
+        audit.setUsuario(comerciante);
+        audit.setAcao("editar");
+        audit.setDataAcao(LocalDateTime.now());
+        auditoriaRepo.save(audit);
+        
+        return updated;
+    }
+
 }

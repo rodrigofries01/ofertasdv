@@ -8,11 +8,13 @@ import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -22,6 +24,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import com.utfpr.ofertasdv.dto.OfertaCreateDto;
 import com.utfpr.ofertasdv.dto.OfertaDto;
+import com.utfpr.ofertasdv.dto.OfertaUpdateDto;
 import com.utfpr.ofertasdv.model.Oferta;
 import com.utfpr.ofertasdv.model.Usuario;
 import com.utfpr.ofertasdv.repository.UsuarioRepository;
@@ -41,6 +44,7 @@ public class OfertaController {
         this.usuarioRepo = usuarioRepo;
     }
 
+    @PreAuthorize("hasRole('COMERCIANTE')")
     @PostMapping
     public ResponseEntity<OfertaDto> criarOferta(
             @Valid @RequestBody OfertaCreateDto dto,
@@ -49,6 +53,7 @@ public class OfertaController {
         return criarOfertaInternal(dto, null, userDetails);
     }
 
+    @PreAuthorize("hasRole('COMERCIANTE')")
     @PostMapping(value = "/with-file", consumes = { MediaType.MULTIPART_FORM_DATA_VALUE })
     public ResponseEntity<OfertaDto> criarOfertaComFoto(
             @Valid @RequestPart("oferta") OfertaCreateDto dto,
@@ -96,21 +101,53 @@ public class OfertaController {
     }
 
     @GetMapping
-    public ResponseEntity<Page<OfertaDto>> listar(
+    public ResponseEntity<Page<OfertaDto>> listarTodas(
             @RequestParam(value = "nome", required = false) String nome,
             @RequestParam(value = "page", defaultValue = "0") int page,
             @RequestParam(value = "size", defaultValue = "10") int size
     ) {
         Page<Oferta> ofertas = ofertaService.buscarOfertas(nome, PageRequest.of(page, size, Sort.by("dataCriacao").descending()));
-        Page<OfertaDto> resposta = ofertas.map(o -> new OfertaDto(
-                o.getId(), o.getNomeProduto(), o.getPreco(), o.getQuantidade(),
-                o.getDescricao(), o.getFotoUrl(), o.getStatus(), o.getDataCriacao(),
-                o.getComerciante().getNome(),
-                o.getAdministrador() != null ? o.getAdministrador().getNome() : null
-        ));
-        return ResponseEntity.ok(resposta);
+        return ResponseEntity.ok(ofertas.map(this::mapToDto));
     }
 
+    @PreAuthorize("hasRole('COMERCIANTE')")
+    @GetMapping("/minhas")
+    public ResponseEntity<Page<OfertaDto>> listarMinhas(
+            @RequestParam(value = "nome", required = false) String nome,
+            @RequestParam(value = "page", defaultValue = "0") int page,
+            @RequestParam(value = "size", defaultValue = "10") int size,
+            @AuthenticationPrincipal UserDetails userDetails
+    ) {
+        String email = userDetails.getUsername();
+        Usuario comerciante = usuarioRepo.findByEmail(email)
+                .orElseThrow(() -> new RuntimeException("Usuário não encontrado"));
+
+        Page<Oferta> ofertas = ofertaService.buscarOfertasPorComerciante(comerciante.getId(), nome, PageRequest.of(page, size, Sort.by("dataCriacao").descending()));
+        return ResponseEntity.ok(ofertas.map(this::mapToDto));
+    }
+
+    @PreAuthorize("hasRole('COMERCIANTE')")
+    @PutMapping("/{id}")
+    public ResponseEntity<OfertaDto> atualizarOferta(
+            @PathVariable Long id,
+            @Valid @RequestBody OfertaUpdateDto dto,
+            @AuthenticationPrincipal UserDetails userDetails
+    ) {
+        String email = userDetails.getUsername();
+        Usuario comerciante = usuarioRepo.findByEmail(email)
+                .orElseThrow(() -> new RuntimeException("Usuário não encontrado"));
+        
+        Oferta ofertaAtualizada = new Oferta();
+        ofertaAtualizada.setNomeProduto(dto.getNomeProduto());
+        ofertaAtualizada.setPreco(dto.getPreco());
+        ofertaAtualizada.setQuantidade(dto.getQuantidade());
+        ofertaAtualizada.setDescricao(dto.getDescricao());
+        
+        Oferta oferta = ofertaService.atualizarOferta(id, ofertaAtualizada, comerciante.getId());
+        return ResponseEntity.ok(mapToDto(oferta));
+    }
+
+    @PreAuthorize("hasRole('ADMINISTRADOR')")
     @PostMapping("/{id}/aprovar")
     public ResponseEntity<OfertaDto> aprovar(
             @PathVariable Long id,
@@ -121,14 +158,10 @@ public class OfertaController {
                 .orElseThrow(() -> new RuntimeException("Usuário não encontrado"));
         
         Oferta oferta = ofertaService.aprovarOferta(id, admin.getId());
-        OfertaDto dto = new OfertaDto(
-                oferta.getId(), oferta.getNomeProduto(), oferta.getPreco(), oferta.getQuantidade(),
-                oferta.getDescricao(), oferta.getFotoUrl(), oferta.getStatus(), oferta.getDataCriacao(),
-                oferta.getComerciante().getNome(), oferta.getAdministrador().getNome()
-        );
-        return ResponseEntity.ok(dto);
+        return ResponseEntity.ok(mapToDto(oferta));
     }
 
+    @PreAuthorize("hasRole('ADMINISTRADOR')")
     @PostMapping("/{id}/rejeitar")
     public ResponseEntity<OfertaDto> rejeitar(
             @PathVariable Long id,
@@ -140,12 +173,6 @@ public class OfertaController {
                 .orElseThrow(() -> new RuntimeException("Usuário não encontrado"));
         
         Oferta oferta = ofertaService.rejeitarOferta(id, admin.getId(), motivo);
-        OfertaDto dto = new OfertaDto(
-                oferta.getId(), oferta.getNomeProduto(), oferta.getPreco(), oferta.getQuantidade(),
-                oferta.getDescricao(), oferta.getFotoUrl(), oferta.getStatus(), oferta.getDataCriacao(),
-                oferta.getComerciante().getNome(),
-                oferta.getAdministrador() != null ? oferta.getAdministrador().getNome() : null
-        );
-        return ResponseEntity.ok(dto);
+        return ResponseEntity.ok(mapToDto(oferta));
     }
 }
