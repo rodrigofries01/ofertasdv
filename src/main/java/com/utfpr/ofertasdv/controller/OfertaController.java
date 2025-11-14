@@ -1,18 +1,33 @@
 package com.utfpr.ofertasdv.controller;
 
-import com.utfpr.ofertasdv.dto.*;
+import java.io.IOException;
+
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RequestPart;
+import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
+
+import com.utfpr.ofertasdv.dto.OfertaCreateDto;
+import com.utfpr.ofertasdv.dto.OfertaDto;
 import com.utfpr.ofertasdv.model.Oferta;
 import com.utfpr.ofertasdv.model.Usuario;
 import com.utfpr.ofertasdv.repository.UsuarioRepository;
 import com.utfpr.ofertasdv.service.OfertaService;
-import jakarta.validation.Valid;
-import org.springframework.data.domain.*;
-import org.springframework.http.*;
-import org.springframework.web.bind.annotation.*;
-import org.springframework.web.multipart.MultipartFile;
 
-import java.io.IOException;
-import java.util.stream.Collectors;
+import jakarta.validation.Valid;
 
 @RestController
 @RequestMapping("/api/ofertas")
@@ -26,14 +41,31 @@ public class OfertaController {
         this.usuarioRepo = usuarioRepo;
     }
 
-    @PostMapping(consumes = { MediaType.MULTIPART_FORM_DATA_VALUE })
+    @PostMapping
     public ResponseEntity<OfertaDto> criarOferta(
-            @Valid @RequestPart("oferta") OfertaCreateDto dto,
-            @RequestPart(value = "foto", required = false) MultipartFile foto
+            @Valid @RequestBody OfertaCreateDto dto,
+            @AuthenticationPrincipal UserDetails userDetails
     ) throws IOException {
+        return criarOfertaInternal(dto, null, userDetails);
+    }
 
-        Usuario comerciante = usuarioRepo.findById(dto.getComercianteId())
-                .orElseThrow(() -> new RuntimeException("Comerciante não encontrado"));
+    @PostMapping(value = "/with-file", consumes = { MediaType.MULTIPART_FORM_DATA_VALUE })
+    public ResponseEntity<OfertaDto> criarOfertaComFoto(
+            @Valid @RequestPart("oferta") OfertaCreateDto dto,
+            @RequestPart(value = "foto", required = false) MultipartFile foto,
+            @AuthenticationPrincipal UserDetails userDetails
+    ) throws IOException {
+        return criarOfertaInternal(dto, foto, userDetails);
+    }
+
+    private ResponseEntity<OfertaDto> criarOfertaInternal(
+            OfertaCreateDto dto,
+            MultipartFile foto,
+            UserDetails userDetails
+    ) throws IOException {
+        String email = userDetails.getUsername();
+        Usuario comerciante = usuarioRepo.findByEmail(email)
+                .orElseThrow(() -> new RuntimeException("Usuário não encontrado"));
 
         Oferta oferta = new Oferta();
         oferta.setNomeProduto(dto.getNomeProduto());
@@ -43,22 +75,24 @@ public class OfertaController {
         oferta.setFotoUrl(dto.getFotoUrl());
         oferta.setComerciante(comerciante);
 
-        Oferta criada = ofertaService.criarOferta(oferta, foto, dto.getComercianteId());
+        Oferta criada = ofertaService.criarOferta(oferta, foto, comerciante.getId());
 
-        OfertaDto resposta = new OfertaDto(
-                criada.getId(),
-                criada.getNomeProduto(),
-                criada.getPreco(),
-                criada.getQuantidade(),
-                criada.getDescricao(),
-                criada.getFotoUrl(),
-                criada.getStatus(),
-                criada.getDataCriacao(),
-                criada.getComerciante().getNome(),
-                criada.getAdministrador() != null ? criada.getAdministrador().getNome() : null
+        return ResponseEntity.status(HttpStatus.CREATED).body(mapToDto(criada));
+    }
+
+    private OfertaDto mapToDto(Oferta oferta) {
+        return new OfertaDto(
+                oferta.getId(),
+                oferta.getNomeProduto(),
+                oferta.getPreco(),
+                oferta.getQuantidade(),
+                oferta.getDescricao(),
+                oferta.getFotoUrl(),
+                oferta.getStatus(),
+                oferta.getDataCriacao(),
+                oferta.getComerciante().getNome(),
+                oferta.getAdministrador() != null ? oferta.getAdministrador().getNome() : null
         );
-
-        return ResponseEntity.status(HttpStatus.CREATED).body(resposta);
     }
 
     @GetMapping
@@ -78,8 +112,15 @@ public class OfertaController {
     }
 
     @PostMapping("/{id}/aprovar")
-    public ResponseEntity<OfertaDto> aprovar(@PathVariable Long id, @RequestParam Long adminId) {
-        Oferta oferta = ofertaService.aprovarOferta(id, adminId);
+    public ResponseEntity<OfertaDto> aprovar(
+            @PathVariable Long id,
+            @AuthenticationPrincipal UserDetails userDetails
+    ) {
+        String email = userDetails.getUsername();
+        Usuario admin = usuarioRepo.findByEmail(email)
+                .orElseThrow(() -> new RuntimeException("Usuário não encontrado"));
+        
+        Oferta oferta = ofertaService.aprovarOferta(id, admin.getId());
         OfertaDto dto = new OfertaDto(
                 oferta.getId(), oferta.getNomeProduto(), oferta.getPreco(), oferta.getQuantidade(),
                 oferta.getDescricao(), oferta.getFotoUrl(), oferta.getStatus(), oferta.getDataCriacao(),
@@ -89,8 +130,16 @@ public class OfertaController {
     }
 
     @PostMapping("/{id}/rejeitar")
-    public ResponseEntity<OfertaDto> rejeitar(@PathVariable Long id, @RequestParam Long adminId, @RequestParam(required = false) String motivo) {
-        Oferta oferta = ofertaService.rejeitarOferta(id, adminId, motivo);
+    public ResponseEntity<OfertaDto> rejeitar(
+            @PathVariable Long id,
+            @RequestParam(required = false) String motivo,
+            @AuthenticationPrincipal UserDetails userDetails
+    ) {
+        String email = userDetails.getUsername();
+        Usuario admin = usuarioRepo.findByEmail(email)
+                .orElseThrow(() -> new RuntimeException("Usuário não encontrado"));
+        
+        Oferta oferta = ofertaService.rejeitarOferta(id, admin.getId(), motivo);
         OfertaDto dto = new OfertaDto(
                 oferta.getId(), oferta.getNomeProduto(), oferta.getPreco(), oferta.getQuantidade(),
                 oferta.getDescricao(), oferta.getFotoUrl(), oferta.getStatus(), oferta.getDataCriacao(),
