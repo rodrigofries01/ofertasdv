@@ -1,22 +1,25 @@
 package com.utfpr.ofertasdv.config;
 
-import com.utfpr.ofertasdv.service.UsuarioService;
-import org.springframework.security.core.context.SecurityContextHolder;
+import java.io.IOException;
+
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.filter.OncePerRequestFilter;
-import jakarta.servlet.*;
-import jakarta.servlet.http.*;
-import java.io.IOException;
+
+import jakarta.servlet.FilterChain;
+import jakarta.servlet.ServletException;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private final JwtUtil jwtUtil;
-    private final UsuarioService usuarioService;
+    private final CustomUserDetailsService userDetailsService;
 
-    public JwtAuthenticationFilter(JwtUtil jwtUtil, UsuarioService usuarioService){
+    public JwtAuthenticationFilter(JwtUtil jwtUtil, CustomUserDetailsService userDetailsService){
         this.jwtUtil = jwtUtil;
-        this.usuarioService = usuarioService;
+        this.userDetailsService = userDetailsService;
     }
 
     @Override
@@ -25,9 +28,10 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         String header = req.getHeader("Authorization");
         if (header != null && header.startsWith("Bearer ")){
             String token = header.substring(7);
+            
             if (jwtUtil.validateToken(token)){
                 String username = jwtUtil.extractUsername(token);
-                UserDetails ud = usuarioService.loadUserByUsername(username);
+                UserDetails ud = userDetailsService.loadUserByUsername(username);
                 UsernamePasswordAuthenticationToken auth = new UsernamePasswordAuthenticationToken(ud, null, ud.getAuthorities());
                 SecurityContextHolder.getContext().setAuthentication(auth);
             }

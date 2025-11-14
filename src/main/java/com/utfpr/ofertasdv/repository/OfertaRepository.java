@@ -8,5 +8,6 @@ import org.springframework.data.domain.Pageable;
 public interface OfertaRepository extends JpaRepository<Oferta, Long> {
     Page<Oferta> findByNomeProdutoContainingIgnoreCase(String nome, Pageable pageable);
     Page<Oferta> findByComerciante_Id(Long comercianteId, Pageable pageable);
+    Page<Oferta> findByComerciante_IdAndNomeProdutoContainingIgnoreCase(Long comercianteId, String nome, Pageable pageable);
     Page<Oferta> findByStatus( Oferta.Status status, Pageable pageable);
 }

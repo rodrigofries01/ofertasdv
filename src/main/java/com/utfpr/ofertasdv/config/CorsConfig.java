@@ -1,5 +1,6 @@
 package com.utfpr.ofertasdv.config;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.cors.CorsConfiguration;
@@ -7,25 +8,28 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 import org.springframework.web.filter.CorsFilter;
 
 import java.util.Arrays;
-import java.util.List;
 
 @Configuration
 public class CorsConfig {
+
+    @Value("${app.cors.allowed-origins}")
+    private String allowedOrigins;
+
+    @Value("${app.cors.allow-credentials:true}")
+    private boolean allowCredentials;
+
+    @Value("${app.cors.max-age:3600}")
+    private long maxAge;
 
     @Bean
     public CorsFilter corsFilter() {
         CorsConfiguration config = new CorsConfiguration();
         
         // Allow credentials (cookies, authorization headers, etc.)
-        config.setAllowCredentials(true);
+        config.setAllowCredentials(allowCredentials);
         
-        // Allowed origins - add your frontend URLs
-        config.setAllowedOrigins(Arrays.asList(
-            "http://localhost:3000",
-            "http://localhost:3001",
-            "http://127.0.0.1:3000",
-            "http://127.0.0.1:3001"
-        ));
+        // Allowed origins from environment variable
+        config.setAllowedOrigins(Arrays.asList(allowedOrigins.split(",")));
         
         // Allowed headers
         config.setAllowedHeaders(Arrays.asList(
@@ -56,7 +60,7 @@ public class CorsConfig {
         ));
         
         // Max age for preflight requests
-        config.setMaxAge(3600L);
+        config.setMaxAge(maxAge);
         
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", config);

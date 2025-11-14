@@ -7,7 +7,7 @@ import java.math.BigDecimal;
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
-public class OfertaCreateDto {
+public class OfertaUpdateDto {
 
     @NotBlank
     private String nomeProduto;
@@ -23,5 +23,5 @@ public class OfertaCreateDto {
     @NotBlank
     private String descricao;
 
-    private String fotoUrl; // opcional
+    private String fotoUrl; // opcional, not editable via this endpoint
 }
